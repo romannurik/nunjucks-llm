@@ -1,3 +1,27 @@
+# `nunjucks-llm` is a fork of Nunjucks that makes it easier to use for LLM prompt hydration and interleaving
+
+Currently forked from Nunjucks version: `3.2.4`
+
+Changes:
+
+- A bunch of `async/await` is now built into the compiler, so expressions that return promises are handled natively.
+- Functions passed as template params can call `this.getBuffer()` to get the current buffer, which is useful for passing as the prefix to LLMs for completion. For example:
+  ```js
+  let template = `
+  Color: Blue
+  Bird: {{ llm() }}
+  `;
+
+  async function llm() {
+    let prefix = this.getBuffer();
+    return await actuallyCallAnLLM(prefix);
+  }
+  ```
+
+Original README below.
+
+---
+
 # Nunjucks
 
 [![NPM Version][npm-image]][npm-url]

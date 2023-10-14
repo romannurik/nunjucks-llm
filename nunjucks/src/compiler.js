@@ -48,11 +48,13 @@ class Compiler extends Obj {
     this.bufferStack.push(this.buffer);
     this.buffer = id;
     this._emit(`var ${this.buffer} = "";`);
+    this._emitPushBuffer(this.buffer);
     return id;
   }
 
   _popBuffer() {
     this.buffer = this.bufferStack.pop();
+    this._emitPopBuffer();
   }
 
   _emit(code) {
@@ -67,13 +69,29 @@ class Compiler extends Obj {
     lines.forEach((line) => this._emitLine(line));
   }
 
+  _emitEnsureGetBuffer() {
+    this._emitLine('context.getBuffer = context.getBuffer || (() => context.getBuffer.__buffers.map(b => b()).join(""));');
+    this._emitLine('context.getBuffer.__buffers = context.getBuffer.__buffers || [];');
+  }
+
+  _emitPushBuffer() {
+    this._emitEnsureGetBuffer();
+    this._emitLine(`context.getBuffer.__buffers.push(() => ${this.buffer});`);
+  }
+
+  _emitPopBuffer() {
+    this._emitEnsureGetBuffer();
+    this._emitLine('context.getBuffer.__buffers.pop();');
+  }
+
   _emitFuncBegin(node, name) {
     this.buffer = 'output';
     this._scopeClosers = '';
-    this._emitLine(`function ${name}(env, context, frame, runtime, cb) {`);
+    this._emitLine(`async function ${name}(env, context, frame, runtime, cb) {`);
     this._emitLine(`var lineno = ${node.lineno};`);
     this._emitLine(`var colno = ${node.colno};`);
     this._emitLine(`var ${this.buffer} = "";`);
+    this._emitPushBuffer();
     this._emitLine('try {');
   }
 
@@ -82,6 +100,7 @@ class Compiler extends Obj {
       this._emitLine('cb(null, ' + this.buffer + ');');
     }
 
+    this._emitPopBuffer();
     this._closeScopeLevels();
     this._emitLine('} catch (e) {');
     this._emitLine('  cb(runtime.handleError(e, lineno, colno));');
@@ -112,7 +131,7 @@ class Compiler extends Obj {
   _makeCallback(res) {
     var err = this._tmpid();
 
-    return 'function(' + err + (res ? ',' + res : '') + ') {\n' +
+    return 'async function(' + err + (res ? ',' + res : '') + ') {\n' +
       'if(' + err + ') { cb(' + err + '); return; }';
   }
 
@@ -197,8 +216,13 @@ class Compiler extends Obj {
     var contentArgs = node.contentArgs;
     var autoescape = typeof node.autoescape === 'boolean' ? node.autoescape : true;
 
+    // TODO: this needs to move to a getter somehow in the compiled code
+    // this._emit('context.__buffer = [');
+    // this._emit([...this.bufferStack, this.buffer].join(','));
+    // this._emit('].join("");');
+
     if (!async) {
-      this._emit(`${this.buffer} += runtime.suppressValue(`);
+      this._emit(`${this.buffer} += await runtime.suppressValue(`);
     }
 
     this._emit(`env.getExtension("${node.extName}")["${node.prop}"](`);
@@ -233,8 +257,8 @@ class Compiler extends Obj {
         }
 
         if (arg) {
-          this._emitLine('function(cb) {');
-          this._emitLine('if(!cb) { cb = function(err) { if(err) { throw err; }}}');
+          this._emitLine('async function(cb) {');
+          this._emitLine('if(!cb) { cb = async function(err) { if(err) { throw err; }}}');
           const id = this._pushBuffer();
 
           this._withScopedSyntax(() => {
@@ -480,7 +504,7 @@ class Compiler extends Obj {
     this._emit('(lineno = ' + node.lineno +
       ', colno = ' + node.colno + ', ');
 
-    this._emit('runtime.callWrap(');
+    this._emit('await runtime.callWrap(');
     // Compile it as normal.
     this._compileExpression(node.name, frame);
 
@@ -625,7 +649,7 @@ class Compiler extends Obj {
   }
 
   compileIfAsync(node, frame) {
-    this._emit('(function(cb) {');
+    this._emit('(async function(cb) {');
     this.compileIf(node, frame, true);
     this._emit('})(' + this._makeCallback());
     this._addScopeLevel();
@@ -763,7 +787,7 @@ class Compiler extends Obj {
 
     if (node.name instanceof nodes.Array) {
       const arrayLen = node.name.children.length;
-      this._emit(`runtime.${asyncMethod}(${arr}, ${arrayLen}, function(`);
+      this._emit(`runtime.${asyncMethod}(${arr}, ${arrayLen}, async function(`);
 
       node.name.children.forEach((name) => {
         this._emit(`${name.value},`);
@@ -778,7 +802,7 @@ class Compiler extends Obj {
       });
     } else {
       const id = node.name.value;
-      this._emitLine(`runtime.${asyncMethod}(${arr}, 1, function(${id}, ${i}, ${len},next) {`);
+      this._emitLine(`runtime.${asyncMethod}(${arr}, 1, async function(${id}, ${i}, ${len},next) {`);
       this._emitLine('frame.set("' + id + '", ' + id + ');');
       frame.set(id, id);
     }
@@ -860,7 +884,7 @@ class Compiler extends Obj {
       `var ${funcId} = runtime.makeMacro(`,
       `[${argNames.join(', ')}], `,
       `[${kwargNames.join(', ')}], `,
-      `function (${realNames.join(', ')}) {`,
+      `async function (${realNames.join(', ')}) {`,
       'var callerFrame = frame;',
       'frame = ' + ((keepFrame) ? 'frame.push(true);' : 'new runtime.Frame();'),
       'kwargs = kwargs || {};',
@@ -894,9 +918,9 @@ class Compiler extends Obj {
     });
 
     this._emitLine('frame = ' + ((keepFrame) ? 'frame.pop();' : 'callerFrame;'));
+    this._popBuffer();
     this._emitLine(`return new runtime.SafeString(${bufferId});`);
     this._emitLine('});');
-    this._popBuffer();
 
     return funcId;
   }
@@ -920,7 +944,7 @@ class Compiler extends Obj {
 
   compileCaller(node, frame) {
     // basically an anonymous "macro expression"
-    this._emit('(function (){');
+    this._emit('(async function (){');
     const funcId = this._compileMacro(node, frame);
     this._emit(`return ${funcId};})()`);
   }
@@ -1008,7 +1032,7 @@ class Compiler extends Obj {
     // waste of performance to always execute huge top-level
     // blocks twice
     if (!this.inBlock) {
-      this._emit('(parentTemplate ? function(e, c, f, r, cb) { cb(""); } : ');
+      this._emit('(parentTemplate ? async function(e, c, f, r, cb) { cb(""); } : ');
     }
     this._emit(`context.getBlock("${node.name.value}")`);
     if (!this.inBlock) {
@@ -1050,24 +1074,24 @@ class Compiler extends Obj {
   compileInclude(node, frame) {
     this._emitLine('var tasks = [];');
     this._emitLine('tasks.push(');
-    this._emitLine('function(callback) {');
+    this._emitLine('async function(callback) {');
     const id = this._compileGetTemplate(node, frame, false, node.ignoreMissing);
     this._emitLine(`callback(null,${id});});`);
     this._emitLine('});');
 
     const id2 = this._tmpid();
     this._emitLine('tasks.push(');
-    this._emitLine('function(template, callback){');
+    this._emitLine('async function(template, callback){');
     this._emitLine('template.render(context.getVariables(), frame, ' + this._makeCallback(id2));
     this._emitLine('callback(null,' + id2 + ');});');
     this._emitLine('});');
 
     this._emitLine('tasks.push(');
-    this._emitLine('function(result, callback){');
+    this._emitLine('async function(result, callback){');
     this._emitLine(`${this.buffer} += result;`);
     this._emitLine('callback(null);');
     this._emitLine('});');
-    this._emitLine('env.waterfall(tasks, function(){');
+    this._emitLine('env.waterfall(tasks, async function(){');
     this._addScopeLevel();
   }
 
@@ -1080,15 +1104,15 @@ class Compiler extends Obj {
     // so the set block writes to the capture output instead of the buffer
     var buffer = this.buffer;
     this.buffer = 'output';
-    this._emitLine('(function() {');
+    this._emitLine('(async function() {');
     this._emitLine('var output = "";');
     this._withScopedSyntax(() => {
       this.compile(node.body, frame);
     });
-    this._emitLine('return output;');
-    this._emitLine('})()');
     // and of course, revert back to the old buffer id
     this.buffer = buffer;
+    this._emitLine('return output;');
+    this._emitLine('})()');
   }
 
   compileOutput(node, frame) {
@@ -1107,6 +1131,7 @@ class Compiler extends Obj {
         if (this.throwOnUndefined) {
           this._emit('runtime.ensureDefined(');
         }
+        this._emit('await ');
         this.compile(child, frame);
         if (this.throwOnUndefined) {
           this._emit(`,${node.lineno},${node.colno})`);

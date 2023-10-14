@@ -1,8 +1,8 @@
 {
-  "name": "nunjucks",
-  "description": "A powerful templating engine with inheritance, asynchronous control, and more (jinja2 inspired)",
-  "version": "3.2.4",
-  "author": "James Long <longster@gmail.com>",
+  "name": "nunjucks-llm",
+  "description": "A fork of Nunjucks that makes it easier to use for LLM prompt hydration and interleaving",
+  "version": "0.0.1",
+  "author": "Roman Nurik <romannurik@google.com>",
   "dependencies": {
     "a-sync-waterfall": "^1.0.0",
     "asap": "^2.0.3",
