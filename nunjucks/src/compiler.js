@@ -520,7 +520,7 @@ class Compiler extends Obj {
   compileFilter(node, frame) {
     var name = node.name;
     this.assertType(name, nodes.Symbol);
-    this._emit('env.getFilter("' + name.value + '").call(context, ');
+    this._emit('await env.getFilter("' + name.value + '").call(context, ');
     this._compileAggregate(node.args, frame);
     this._emit(')');
   }
