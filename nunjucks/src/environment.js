@@ -341,6 +341,7 @@ class Context extends Obj {
 
     // Make a duplicate of ctx
     this.ctx = lib.extend({}, ctx);
+    this.ctx[globalRuntime.ABORT_SIGNAL] = ctx[globalRuntime.ABORT_SIGNAL];
 
     this.blocks = {};
     this.exported = [];

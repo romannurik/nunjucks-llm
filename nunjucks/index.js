@@ -56,6 +56,7 @@ module.exports = {
   parser: parser,
   lexer: lexer,
   runtime: runtime,
+  setAbortSignalOnContext: runtime.setAbortSignalOnContext,
   lib: lib,
   nodes: nodes,
   installJinjaCompat: installJinjaCompat,

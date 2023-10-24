@@ -222,7 +222,9 @@ class Compiler extends Obj {
     // this._emit('].join("");');
 
     if (!async) {
-      this._emit(`${this.buffer} += await runtime.suppressValue(`);
+      this._emit(`${this.buffer} += `);
+      this._emit('runtime.maybeAbort(context,');
+      this._emit('await runtime.suppressValue(');
     }
 
     this._emit(`env.getExtension("${node.extName}")["${node.prop}"](`);
@@ -282,7 +284,8 @@ class Compiler extends Obj {
         `${this.buffer} += runtime.suppressValue(${res}, ${autoescape} && env.opts.autoescape);`);
       this._addScopeLevel();
     } else {
-      this._emit(')');
+      this._emit(')'); // suppressValue
+      this._emit(')'); // maybeAbort
       this._emit(`, ${autoescape} && env.opts.autoescape);\n`);
     }
   }
@@ -504,6 +507,7 @@ class Compiler extends Obj {
     this._emit('(lineno = ' + node.lineno +
       ', colno = ' + node.colno + ', ');
 
+    this._emit('runtime.maybeAbort(context,');
     this._emit('await runtime.callWrap(');
     // Compile it as normal.
     this._compileExpression(node.name, frame);
@@ -514,15 +518,18 @@ class Compiler extends Obj {
 
     this._compileAggregate(node.args, frame, '[', '])');
 
-    this._emit(')');
+    this._emit(')'); // callWrap
+    this._emit(')'); // maybeAbort
   }
 
   compileFilter(node, frame) {
     var name = node.name;
     this.assertType(name, nodes.Symbol);
+    this._emit('runtime.maybeAbort(context,');
     this._emit('await env.getFilter("' + name.value + '").call(context, ');
     this._compileAggregate(node.args, frame);
-    this._emit(')');
+    this._emit(')'); // getFilter.call
+    this._emit(')'); // maybeAbort
   }
 
   compileFilterAsync(node, frame) {
@@ -1128,14 +1135,16 @@ class Compiler extends Obj {
         }
       } else {
         this._emit(`${this.buffer} += runtime.suppressValue(`);
+        this._emit('runtime.maybeAbort(context,');
         if (this.throwOnUndefined) {
           this._emit('runtime.ensureDefined(');
         }
         this._emit('await ');
         this.compile(child, frame);
         if (this.throwOnUndefined) {
-          this._emit(`,${node.lineno},${node.colno})`);
+          this._emit(`,${node.lineno},${node.colno})`); // ensureDefined
         }
+        this._emit(')'); // maybeAbort
         this._emit(', env.opts.autoescape);\n');
       }
     });

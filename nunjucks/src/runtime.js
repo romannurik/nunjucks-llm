@@ -6,6 +6,7 @@ var supportsIterators = (
   typeof Symbol === 'function' && Symbol.iterator && typeof arrayFrom === 'function'
 );
 
+const ABORT_SIGNAL = Symbol('Abort signal');
 
 // Frames keep track of scoping both at compile-time and run-time so
 // we know how to access variables. Block tags can introduce special
@@ -249,6 +250,14 @@ function callWrap(obj, name, context, args) {
   return obj.apply(context, args);
 }
 
+function maybeAbort(context, value) {
+  let abortSignal = context.lookup(ABORT_SIGNAL);
+  if (abortSignal) {
+    abortSignal.throwIfAborted();
+  }
+  return value;
+}
+
 function contextOrFrameLookup(context, frame, name) {
   var val = frame.lookup(name);
   return (val !== undefined) ?
@@ -357,6 +366,12 @@ function fromIterator(arr) {
   }
 }
 
+function setAbortSignalOnContext(obj, signal) {
+  // Don't just export ABORT_SIGNAL because it could get
+  // mangled in the module export / bundling process
+  obj[ABORT_SIGNAL] = signal;
+}
+
 module.exports = {
   Frame: Frame,
   makeMacro: makeMacro,
@@ -376,5 +391,8 @@ module.exports = {
   asyncEach: asyncEach,
   asyncAll: asyncAll,
   inOperator: lib.inOperator,
-  fromIterator: fromIterator
+  fromIterator: fromIterator,
+  maybeAbort: maybeAbort,
+  setAbortSignalOnContext: setAbortSignalOnContext,
+  ABORT_SIGNAL: ABORT_SIGNAL,
 };
