@@ -1,7 +1,7 @@
 {
   "name": "nunjucks-llm",
   "description": "A fork of Nunjucks that makes it easier to use for LLM prompt hydration and interleaving",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "author": "Roman Nurik <romannurik@google.com>",
   "dependencies": {
     "a-sync-waterfall": "^1.0.0",

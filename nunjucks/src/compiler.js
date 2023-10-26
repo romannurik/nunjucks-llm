@@ -525,11 +525,14 @@ class Compiler extends Obj {
   compileFilter(node, frame) {
     var name = node.name;
     this.assertType(name, nodes.Symbol);
+    this._emit('(lineno = ' + node.lineno +
+      ', colno = ' + node.colno + ', ');
     this._emit('runtime.maybeAbort(context,');
     this._emit('await env.getFilter("' + name.value + '").call(context, ');
     this._compileAggregate(node.args, frame);
     this._emit(')'); // getFilter.call
     this._emit(')'); // maybeAbort
+    this._emit(')'); // line numbers
   }
 
   compileFilterAsync(node, frame) {
@@ -1038,6 +1041,7 @@ class Compiler extends Obj {
     // because blocks can have side effects, but it seems like a
     // waste of performance to always execute huge top-level
     // blocks twice
+    this._emit('await');
     if (!this.inBlock) {
       this._emit('(parentTemplate ? async function(e, c, f, r, cb) { cb(""); } : ');
     }
@@ -1047,7 +1051,10 @@ class Compiler extends Obj {
     }
     this._emitLine('(env, context, frame, runtime, ' + this._makeCallback(id));
     this._emitLine(`${this.buffer} += ${id};`);
-    this._addScopeLevel();
+    // because we're now await'ing, we don't need to move everything after
+    // the block call into the callback, we can end right here
+    // this._addScopeLevel();
+    this._emitLine('});');
   }
 
   compileSuper(node, frame) {

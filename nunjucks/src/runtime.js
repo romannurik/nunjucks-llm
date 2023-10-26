@@ -269,6 +269,13 @@ function handleError(error, lineno, colno) {
   if (error.lineno) {
     return error;
   } else {
+    // nunjucks-llm modification: fix incorrect line numbers being reported in runtime errors 
+    if (lineno !== undefined) {
+      lineno += 1;
+    }
+    if (colno !== undefined) {
+      colno += 1;
+    }
     return new lib.TemplateError(error, lineno, colno);
   }
 }
